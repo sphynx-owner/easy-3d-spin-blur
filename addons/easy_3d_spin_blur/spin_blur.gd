@@ -4,8 +4,6 @@ extends Node3D
 
 const ENVELOPING_MESH_FRONT_SHADER: Shader = preload("res://addons/easy_3d_spin_blur/spin_blur_mesh_front.gdshader")
 
-const ENVELOPING_MESH_BACK_SHADER: Shader = preload("res://addons/easy_3d_spin_blur/spin_blur_mesh_back.gdshader")
-
 const DEBUG_SHADER: Shader = preload("res://addons/easy_3d_spin_blur/debug_spin_mesh.gdshader")
 
 const SPIN_BLUR_ROOT_META_KEY: StringName = &"spin_blur_root"
@@ -195,24 +193,11 @@ func _ready() -> void:
 	
 	front_material.render_priority = 1
 	
-	# This commented out code is there for archival purposes.
-	# I created the back shader to support showing the blur
-	# if you are enside the mesh, however it is not practical
-	# given the much better enveloping mesh system.
-	#var back_material := ShaderMaterial.new()
-	#
-	#back_material.shader = ENVELOPING_MESH_BACK_SHADER
-	#
-	#back_material.render_priority = 2
-	#
-	#front_material.next_pass = back_material
-	
 	if Engine.is_editor_hint():
 		_debug_material = ShaderMaterial.new()
 		_debug_material.shader = DEBUG_SHADER
 		_debug_material.render_priority = 3
 		
-		#back_material.next_pass = _debug_material
 		front_material.next_pass = _debug_material
 	
 	_enveloping_node.material_override = front_material
@@ -318,12 +303,6 @@ func capture_shadows() -> void:
 		mesh_dup.layers |= _layer_mask
 		
 		mesh_dup.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
-		
-		await get_tree().process_frame
-		
-		intermediary_node.owner = get_tree().edited_scene_root
-		
-		mesh_dup.owner = get_tree().edited_scene_root
 
 
 func _enable() -> void:
