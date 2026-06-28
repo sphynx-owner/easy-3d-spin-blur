@@ -10,6 +10,10 @@ const DEBUG_SHADER: Shader = preload("res://addons/easy_3d_spin_blur/debug_spin_
 
 const ENVELOPING_NODE_META_KEY: StringName = &"spin_blur_enveloping_node"
 
+const SHADOW_DUP_INTERMEDIARY: StringName = &"spin_blur_shadow_dup_intermediary"
+
+const SHADOW_DUP_META_KEY: StringName = &"spin_blur_shadow_dup"
+
 
 @export var target: Node3D:
 	set = _set_target
@@ -61,13 +65,20 @@ var _activation_threshold_setter_gate := false
 @export var rolling_shutter_amount: float = 0.0
 
 @export_subgroup("lighting", "lighting_")
-## When [code]true[/code], it will invoke [method capture_lighting] automatically when
-## ready.
+
+## When [code]true[/code], [method capture_lighting] will be invoked automatically when
+## this spin blur is ready.
 @export var lighting_capture_on_ready: bool = false
 
 ## A tool button to detect lighting-related nodes and ensure they are visible under
 ## [member reserved_render_layer] render layer.
 @export_tool_button("Capture Lighting") var lighting_capture = capture_lighting
+
+@export_subgroup("shadows", "shadows_")
+
+@export var shadows_capture_on_ready: bool = false
+
+@export_tool_button("Capture Shadows") var shadows_capture = capture_shadows
 
 ## The enveloping mesh is what makes the spin blur possible. It is a mesh that tightly
 ## encapsulates the space the target mesh sweeps through as it rotates. You can generate
@@ -214,8 +225,12 @@ func _ready() -> void:
 	_update_enveloping_mesh()
 	_update_enabled()
 	
-	if !Engine.is_editor_hint() and lighting_capture_on_ready:
-		capture_lighting.call_deferred()
+	if !Engine.is_editor_hint():
+		if lighting_capture_on_ready:
+			capture_lighting.call_deferred()
+		
+		if shadows_capture_on_ready:
+			capture_shadows.call_deferred()
 
 
 func _process(delta: float) -> void:
@@ -239,6 +254,72 @@ func capture_lighting() -> void:
 		light.layers |= _layer_mask
 
 
+## Detects all meshes that cast shadows in the scene, and creates duplicates for
+## each one as children of those meshes, with she shadow casting mode set to
+## [constant GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY], and the layers
+## set to include [member reserved_render_layer]
+func capture_shadows() -> void:
+	var shadows_to_copy: Array[Node]
+	
+	_scan_for_shadows(get_viewport(), get_viewport(), shadows_to_copy)
+	
+	for mesh: GeometryInstance3D in shadows_to_copy:
+		# An intermediary node is necessary, because CSG meshes seem to have unexpected render layer
+		# behavior across direct hierarchy.
+		var intermediary_node: Node3D
+		
+		var mesh_dup: GeometryInstance3D
+		
+		for child in mesh.get_children():
+			if child.has_meta(SHADOW_DUP_INTERMEDIARY):
+				intermediary_node = child
+				break
+		
+		if !intermediary_node:
+			intermediary_node = Node3D.new()
+			
+			mesh.add_child(intermediary_node)
+		
+		for child in intermediary_node.get_children():
+			if child.has_meta(SHADOW_DUP_META_KEY):
+				mesh_dup = child
+			
+			break
+		
+		if !mesh_dup:
+			mesh_dup = mesh.duplicate(0)
+			
+			mesh_dup.scene_file_path = ""
+			
+			for child in mesh_dup.get_children():
+				mesh_dup.remove_child(child)
+				child.queue_free()
+			
+			mesh_dup.set_script(null)
+			
+			mesh_dup.layers = 0
+			
+			mesh_dup.set_meta(SHADOW_DUP_META_KEY, true)
+			
+			intermediary_node.add_child(mesh_dup)
+		
+		intermediary_node.name = "SpinBlurShadowIntermediary"
+		
+		intermediary_node.transform = Transform3D()
+		
+		mesh_dup.name = mesh.name + "_SpinBlurShadowDuplicate"
+		
+		mesh_dup.transform = Transform3D()
+		
+		mesh_dup.layers |= _layer_mask
+		
+		mesh_dup.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+		
+		intermediary_node.set_deferred("owner", get_tree().edited_scene_root)
+		
+		mesh_dup.set_deferred("owner", get_tree().edited_scene_root)
+
+
 func _enable() -> void:
 	_target_set_layers_recursive(target, layers_to_revert | _layer_mask)
 
@@ -257,6 +338,24 @@ func _scan_for_lighting(node: Node, parent_viewport: Viewport, result: Array[Nod
 	
 	for child in node.get_children():
 		_scan_for_lighting(child, parent_viewport, result)
+
+
+func _scan_for_shadows(node: Node, parent_viewport: Viewport, result: Array[Node]) -> void:
+	if node is Viewport and node != parent_viewport:
+		return
+	
+	if node is GeometryInstance3D \
+	and !node.has_meta(SHADOW_DUP_META_KEY) \
+	and !node.has_meta(ENVELOPING_NODE_META_KEY) \
+	and node != target:
+		if node.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+		or node.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_DOUBLE_SIDED \
+		or node.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
+			print(node.name)
+			result.append(node)
+	
+	for child in node.get_children():
+		_scan_for_shadows(child, parent_viewport, result)
 
 
 func _set_shader_parameter_recursive(
