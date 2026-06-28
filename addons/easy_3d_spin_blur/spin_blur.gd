@@ -625,7 +625,11 @@ func _set_layer(value: int) -> void:
 func _set_target(value: Node3D) -> void:
 	target = value
 	
-	target.set_meta(SPIN_BLUR_ROOT_META_KEY, get_instance_id())
+	if !target.is_node_ready():
+		target.ready.connect(target.set_meta.bind(SPIN_BLUR_ROOT_META_KEY, get_instance_id()), CONNECT_ONE_SHOT)
+		
+	else:
+		target.set_meta(SPIN_BLUR_ROOT_META_KEY, get_instance_id())
 	
 	_update_enabled()
 	
