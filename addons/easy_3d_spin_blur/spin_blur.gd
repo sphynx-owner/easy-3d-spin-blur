@@ -8,6 +8,8 @@ const ENVELOPING_MESH_BACK_SHADER: Shader = preload("res://addons/easy_3d_spin_b
 
 const DEBUG_SHADER: Shader = preload("res://addons/easy_3d_spin_blur/debug_spin_mesh.gdshader")
 
+const SPIN_BLUR_ROOT_META_KEY: StringName = &"spin_blur_root"
+
 const ENVELOPING_NODE_META_KEY: StringName = &"spin_blur_enveloping_node"
 
 const SHADOW_DUP_INTERMEDIARY: StringName = &"spin_blur_shadow_dup_intermediary"
@@ -248,7 +250,7 @@ func _process(delta: float) -> void:
 func capture_lighting() -> void:
 	var lights_to_copy: Array[Node]
 	
-	_scan_for_lighting(get_viewport(), get_viewport(), lights_to_copy)
+	_scan_for_lighting(get_viewport(), lights_to_copy)
 	
 	for light: Node in lights_to_copy:
 		light.layers |= _layer_mask
@@ -261,7 +263,7 @@ func capture_lighting() -> void:
 func capture_shadows() -> void:
 	var shadows_to_copy: Array[Node]
 	
-	_scan_for_shadows(get_viewport(), get_viewport(), shadows_to_copy)
+	_scan_for_shadows(get_viewport(), shadows_to_copy)
 	
 	for mesh: GeometryInstance3D in shadows_to_copy:
 		# An intermediary node is necessary, because CSG meshes seem to have unexpected render layer
@@ -319,40 +321,37 @@ func capture_shadows() -> void:
 
 
 func _enable() -> void:
-	_target_set_layers_recursive(target, layers_to_revert | _layer_mask)
+	_target_set_layers_recursive(layers_to_revert | _layer_mask)
 
 
 func _disable() -> void:
-	_target_set_layers_recursive(target, layers_to_revert)
+	_target_set_layers_recursive(layers_to_revert)
 	visible = false
 
 
-func _scan_for_lighting(node: Node, parent_viewport: Viewport, result: Array[Node]) -> void:
-	if node is Viewport and node != parent_viewport:
-		return
-	
-	if node is Light3D:
-		result.append(node)
-	
+func _scan_for_lighting(node: Node, result: Array[Node]) -> void:
 	for child in node.get_children():
-		_scan_for_lighting(child, parent_viewport, result)
+		if _should_stop_recursion(child):
+			continue
+		
+		if child is Light3D:
+			result.append(child)
+		
+		_scan_for_lighting(child, result)
 
 
-func _scan_for_shadows(node: Node, parent_viewport: Viewport, result: Array[Node]) -> void:
-	if node is Viewport and node != parent_viewport:
-		return
-	
-	if node is GeometryInstance3D \
-	and !node.has_meta(SHADOW_DUP_META_KEY) \
-	and !node.has_meta(ENVELOPING_NODE_META_KEY) \
-	and node != target:
-		if node.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
-		or node.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_DOUBLE_SIDED \
-		or node.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
-			result.append(node)
-	
+func _scan_for_shadows(node: Node, result: Array[Node]) -> void:
 	for child in node.get_children():
-		_scan_for_shadows(child, parent_viewport, result)
+		if _should_stop_recursion(child):
+			continue
+		
+		if child is GeometryInstance3D \
+		and child.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+		or child.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_DOUBLE_SIDED \
+		or child.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
+			result.append(child)
+		
+		_scan_for_shadows(child, result)
 
 
 func _set_shader_parameter_recursive(
@@ -376,7 +375,7 @@ func _generate_enveloping_mesh() -> void:
 		return
 	
 	enveloping_mesh = SpinMesh.generate(
-		_collect_target_meshes_recursive(target), 
+		_collect_target_meshes_recursive(), 
 		target_rotation_axis, 
 		rings, 
 		radial_segments, 
@@ -388,21 +387,47 @@ func _generate_enveloping_mesh() -> void:
 
 
 func _collect_target_meshes_recursive(
-	root: Node3D,
+	root: Node3D = target,
 	node: Node = root, 
 	ret: Dictionary[MeshInstance3D, Transform3D] = {}
 ) -> Dictionary[MeshInstance3D, Transform3D]:
-	if node is MeshInstance3D and node.mesh and \
-	!(node is GeometryInstance3D and node.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY):
+	if node is MeshInstance3D and node.mesh and !_is_shadow_mesh(node):
 		ret[node as MeshInstance3D] = root.global_transform.affine_inverse() * node.global_transform
 	
 	for child in node.get_children():
-		if child == self:
+		if _should_stop_recursion(child):
 			continue
 		
 		_collect_target_meshes_recursive(root, child, ret)
 	
 	return ret
+
+
+func _target_set_layers_recursive(layers: int, node: Node = target) -> void:
+	if node is VisualInstance3D and !_is_shadow_mesh(node):
+		node.layers = layers
+	
+	for child in node.get_children():
+		if _should_stop_recursion(child):
+			continue
+		
+		_target_set_layers_recursive(layers, child)
+
+
+func _should_stop_recursion(node: Node) -> bool:
+	if node is SpinBlur:
+		return true
+	
+	if node is Viewport:
+		return true
+	
+	if node.has_meta(SHADOW_DUP_INTERMEDIARY) or node.has_meta(SHADOW_DUP_META_KEY) or node.has_meta(ENVELOPING_NODE_META_KEY):
+		return true
+	
+	if _get_target_spin_blur(node):
+		return true
+	
+	return false
 
 
 func _update_enabled() -> void:
@@ -472,10 +497,10 @@ func _update_enveloping_node() -> void:
 	)
 	
 	if abs(_rotation_speed_cache) > activation_speed_threshold_upper:
-		_target_set_layers_recursive(target, _layer_mask)
+		_target_set_layers_recursive(_layer_mask)
 		
 	else:
-		_target_set_layers_recursive(target, layers_to_revert | _layer_mask)
+		_target_set_layers_recursive(layers_to_revert | _layer_mask)
 	
 	if abs(_rotation_speed_cache) > activation_speed_threshold_lower or (draw_debug and Engine.is_editor_hint()):
 		visible = true
@@ -517,18 +542,6 @@ func _update_enveloping_node() -> void:
 	_enveloping_node.global_basis.z.normalized() * target_transform.basis.z.length()
 
 
-func _target_set_layers_recursive(root: Node, layers: int) -> void:
-	if "layers" in root and \
-	!(root is GeometryInstance3D and root.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY):
-		root.layers = layers
-	
-	for child in root.get_children():
-		if child == self:
-			continue
-		
-		_target_set_layers_recursive(child, layers)
-
-
 func _update_viewport_texture() -> void:
 	if !is_node_ready():
 		return
@@ -561,6 +574,30 @@ func _update_enveloping_mesh() -> void:
 		_enveloping_node.mesh = enveloping_mesh
 
 
+func _get_target_spin_blur(node: Node) -> SpinBlur:
+	if !node.has_meta(SPIN_BLUR_ROOT_META_KEY):
+		return null
+	
+	var spin_blur_instance_id: int = node.get_meta(SPIN_BLUR_ROOT_META_KEY)
+	
+	if !is_instance_id_valid(spin_blur_instance_id):
+		return null
+	
+	var spin_blur: Variant = instance_from_id(spin_blur_instance_id)
+	
+	if spin_blur is not SpinBlur:
+		return null
+	
+	if spin_blur.target != node:
+		return null
+	
+	return spin_blur
+
+
+func _is_shadow_mesh(node: Node) -> bool:
+	return node is GeometryInstance3D and node.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+
+
 func _set_enabled(value: bool) -> void:
 	enabled = value
 	
@@ -581,6 +618,8 @@ func _set_layer(value: int) -> void:
 
 func _set_target(value: Node3D) -> void:
 	target = value
+	
+	target.set_meta(SPIN_BLUR_ROOT_META_KEY, self.get_instance_id())
 	
 	_update_enabled()
 	
