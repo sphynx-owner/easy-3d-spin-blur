@@ -318,6 +318,12 @@ func capture_shadows() -> void:
 		mesh_dup.layers |= _layer_mask
 		
 		mesh_dup.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+		
+		await get_tree().process_frame
+		
+		intermediary_node.owner = get_tree().edited_scene_root
+		
+		mesh_dup.owner = get_tree().edited_scene_root
 
 
 func _enable() -> void:
@@ -345,11 +351,11 @@ func _scan_for_shadows(node: Node, result: Array[Node]) -> void:
 		if _should_stop_recursion(child):
 			continue
 		
-		if child is GeometryInstance3D \
-		and child.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
-		or child.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_DOUBLE_SIDED \
-		or child.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
-			result.append(child)
+		if child is GeometryInstance3D:
+			if child.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+			or child.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_DOUBLE_SIDED \
+			or child.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
+				result.append(child)
 		
 		_scan_for_shadows(child, result)
 
@@ -619,7 +625,7 @@ func _set_layer(value: int) -> void:
 func _set_target(value: Node3D) -> void:
 	target = value
 	
-	target.set_meta(SPIN_BLUR_ROOT_META_KEY, self.get_instance_id())
+	target.set_meta(SPIN_BLUR_ROOT_META_KEY, get_instance_id())
 	
 	_update_enabled()
 	
