@@ -278,6 +278,8 @@ func capture_shadows() -> void:
 		if !intermediary_node:
 			intermediary_node = Node3D.new()
 			
+			intermediary_node.set_meta(SHADOW_DUP_INTERMEDIARY, true)
+			
 			mesh.add_child(intermediary_node)
 		
 		for child in intermediary_node.get_children():
@@ -314,10 +316,6 @@ func capture_shadows() -> void:
 		mesh_dup.layers |= _layer_mask
 		
 		mesh_dup.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
-		
-		intermediary_node.set_deferred("owner", get_tree().edited_scene_root)
-		
-		mesh_dup.set_deferred("owner", get_tree().edited_scene_root)
 
 
 func _enable() -> void:
@@ -351,7 +349,6 @@ func _scan_for_shadows(node: Node, parent_viewport: Viewport, result: Array[Node
 		if node.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
 		or node.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_DOUBLE_SIDED \
 		or node.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
-			print(node.name)
 			result.append(node)
 	
 	for child in node.get_children():
