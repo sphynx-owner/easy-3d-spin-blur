@@ -70,15 +70,15 @@ var _activation_threshold_setter_gate := false
 ## this spin blur is ready.
 @export var lighting_capture_on_ready: bool = false
 
-## A tool button to detect lighting-related nodes and ensure they are visible under
-## [member reserved_render_layer] render layer.
 @export_tool_button("Capture Lighting") var lighting_capture = capture_lighting
 
 @export_subgroup("shadows", "shadows_")
 
+## When [code]true[/code], [method capture_shadows] will be invoked automatically when
+## this spin blur is ready
 @export var shadows_capture_on_ready: bool = false
 
-@export_tool_button("Capture Shadows") var shadows_capture = capture_shadows
+@export_tool_button("Capture Shadows Editor Only") var shadows_capture = capture_shadows
 
 ## The enveloping mesh is what makes the spin blur possible. It is a mesh that tightly
 ## encapsulates the space the target mesh sweeps through as it rotates. You can generate
@@ -230,6 +230,38 @@ func _process(delta: float) -> void:
 	_update_enveloping_node()
 
 
+static func _find_spin_blur(node: Node) -> SpinBlur:
+	while node:
+		var spin_blur: SpinBlur = _get_target_spin_blur(node)
+		
+		if spin_blur:
+			return spin_blur
+		
+		node = node.get_parent()
+	
+	return null
+
+
+static func _get_target_spin_blur(node: Node) -> SpinBlur:
+	if !node.has_meta(SPIN_BLUR_ROOT_META_KEY):
+		return null
+	
+	var spin_blur_instance_id: int = node.get_meta(SPIN_BLUR_ROOT_META_KEY)
+	
+	if !is_instance_id_valid(spin_blur_instance_id):
+		return null
+	
+	var spin_blur: Variant = instance_from_id(spin_blur_instance_id)
+	
+	if spin_blur is not SpinBlur:
+		return null
+	
+	if spin_blur.target != node:
+		return null
+	
+	return spin_blur
+
+
 ## Detects lighting-related nodes and ensure they are visible under
 ## [member reserved_render_layer] render layer.
 func capture_lighting() -> void:
@@ -244,7 +276,8 @@ func capture_lighting() -> void:
 ## Detects all meshes that cast shadows in the scene, and creates duplicates for
 ## each one as children of those meshes, with she shadow casting mode set to
 ## [constant GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY], and the layers
-## set to include [member reserved_render_layer]
+## set to include [member reserved_render_layer]. This allows the shadows
+## in the scene to get casted onto the separately rendered spin blur meshes.
 func capture_shadows() -> void:
 	var shadows_to_copy: Array[Node]
 	
@@ -277,6 +310,8 @@ func capture_shadows() -> void:
 		
 		if !mesh_dup:
 			mesh_dup = mesh.duplicate(0)
+			
+			mesh_dup.owner = null
 			
 			mesh_dup.scene_file_path = ""
 			
@@ -400,13 +435,16 @@ func _target_set_layers_recursive(layers: int, node: Node = target) -> void:
 
 
 func _should_stop_recursion(node: Node) -> bool:
-	if node is SpinBlur:
+	if node is SpinBlur or node is SpinBlurShadow:
 		return true
 	
 	if node is Viewport:
 		return true
 	
-	if node.has_meta(SHADOW_DUP_INTERMEDIARY) or node.has_meta(SHADOW_DUP_META_KEY) or node.has_meta(ENVELOPING_NODE_META_KEY):
+	if node.has_meta(SHADOW_DUP_INTERMEDIARY) \
+	or node.has_meta(SHADOW_DUP_META_KEY) \
+	or node.has_meta(ENVELOPING_NODE_META_KEY) \
+	or node.has_meta(SpinBlurShadow.SHADOW_MESH_INSTANCE_META):
 		return true
 	
 	if _get_target_spin_blur(node):
@@ -557,26 +595,6 @@ func _update_depth_texture() -> void:
 func _update_enveloping_mesh() -> void:
 	if _enveloping_node:
 		_enveloping_node.mesh = enveloping_mesh
-
-
-func _get_target_spin_blur(node: Node) -> SpinBlur:
-	if !node.has_meta(SPIN_BLUR_ROOT_META_KEY):
-		return null
-	
-	var spin_blur_instance_id: int = node.get_meta(SPIN_BLUR_ROOT_META_KEY)
-	
-	if !is_instance_id_valid(spin_blur_instance_id):
-		return null
-	
-	var spin_blur: Variant = instance_from_id(spin_blur_instance_id)
-	
-	if spin_blur is not SpinBlur:
-		return null
-	
-	if spin_blur.target != node:
-		return null
-	
-	return spin_blur
 
 
 func _is_shadow_mesh(node: Node) -> bool:
