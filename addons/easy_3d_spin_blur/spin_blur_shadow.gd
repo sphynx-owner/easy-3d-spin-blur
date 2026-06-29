@@ -102,6 +102,8 @@ func _update_meshes() -> void:
 		
 		new_mesh_1.global_basis = _parent_mesh.global_basis.rotated(_spin_blur._rotation_vector_cache, angle)
 		
+		# If the subdivision count is even, the last subdivision symmetry pair is the opposing angle,
+		# meaning 2 overlapping meshes, and an assumed extra mesh. We need to exit early in that case.
 		if i * 2 + 2 >= subdivisions:
 			continue
 		
@@ -113,6 +115,8 @@ func _update_meshes() -> void:
 		
 		new_mesh_2.global_basis = _parent_mesh.global_basis.rotated(_spin_blur._rotation_vector_cache, -angle)
 	
+	# If the subdivision count is even, the last subdivision symmetry pair is the opposing angle,
+	# meaning 2 overlapping meshes, and an assumed extra mesh. We need to clamp the mesh count in that case.
 	var active_mesh_count: int = min(subdivisions, 1 + symmetry_mesh_count * 2) 
 	
 	var transparency: float = min(
