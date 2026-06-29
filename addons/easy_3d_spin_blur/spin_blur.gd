@@ -340,6 +340,22 @@ func capture_shadows() -> void:
 		mesh_dup.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 
 
+## Allows achieving color correctness with environments that have accumulative color effects like
+## tonemapping and adjustments, by creating a duplicate of the environment with those turned off.
+## If the original environment changes, you may want to call this again.
+## Note that this will affect all other spin blurs that share the same
+## parent viewport nad render layer as this one.
+func fix_environment(world_environment: WorldEnvironment) -> void:
+	var environment: Environment = world_environment.environment.duplicate()
+	
+	environment.adjustment_enabled = false
+	environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	environment.tonemap_exposure = 1.0
+	environment.tonemap_white = 1.0
+	
+	SpinBlurHelpers.set_spin_blur_custom_environment(self, environment)
+
+
 func _enable() -> void:
 	_target_set_layers_recursive(layers_to_revert | _layer_mask)
 
@@ -500,8 +516,8 @@ func _update_enveloping_node() -> void:
 	
 	var angle: float = (PI - abs(centered_angle)) * abs(_rotation_vector_cache.dot(difference_quat.get_axis()))
 	
-	if !Engine.is_editor_hint() and target.has_method("_get_rotation_speed"):
-		angle = target._get_rotation_speed()
+	if !Engine.is_editor_hint() and target.has_method("_get_spin_blur_rotation_speed"):
+		angle = target._get_spin_blur_rotation_speed() * get_process_delta_time()
 	
 	_rotation_speed_cache = angle \
 	if override_rotation_speed == 0.0 or !Engine.is_editor_hint() \

@@ -7,6 +7,16 @@ class_name SpinBlurHelpers
 const SPIN_BLUR_META_KEY: StringName = &"spin_blur_metadata"
 
 
+static func set_spin_blur_custom_environment(spin_blur: SpinBlur, environment: Environment) -> void:
+	if !spin_blur.is_inside_tree():
+		push_error("spin blur %s is not inside tree" % [spin_blur])
+		return
+	
+	var camera: SpinBlurCamera = get_spin_blur_camera(spin_blur)
+	
+	camera.environment = environment
+
+
 static func register_spin_blur(spin_blur: SpinBlur) -> void:
 	if !spin_blur.is_inside_tree():
 		push_error("spin blur %s is not inside tree" % [spin_blur])
