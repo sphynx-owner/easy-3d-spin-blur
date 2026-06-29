@@ -60,13 +60,13 @@ void fragment() {
 	float squared_sampling_error_threshold = max(sampling_error_threshold * sampling_error_threshold, EPSILON);
 	
 	// total of valid samples
-	float weight = 0.;
+	float weight = 1e-3;
 	
 	// total of valid/valid-yet-transparent samples
-	float alpha_weight = 1e-5;
+	float alpha_weight = 1e-3;
 	
 	// total color
-	vec4 sum = vec4(0);
+	vec4 sum = weight * texture(screen_texture, SCREEN_UV);
 	
 	for(int i = 0; i < sample_count; i++)
 	{

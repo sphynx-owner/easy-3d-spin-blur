@@ -519,24 +519,31 @@ func _update_enveloping_node() -> void:
 		blur_intensity,
 	)
 	
-	if abs(_rotation_speed_cache) > activation_speed_threshold_upper:
+	var abs_rotation_speed: float = abs(_rotation_speed_cache)
+	
+	
+	
+	if abs_rotation_speed > activation_speed_threshold_upper:
 		_target_set_layers_recursive(_layer_mask)
 		
 	else:
 		_target_set_layers_recursive(layers_to_revert | _layer_mask)
 	
-	if abs(_rotation_speed_cache) > activation_speed_threshold_lower or (draw_debug and Engine.is_editor_hint()):
+	if abs_rotation_speed > activation_speed_threshold_lower or (draw_debug and Engine.is_editor_hint()):
 		visible = true
 		
 	else:
 		visible = false
 	
-	_fade_in_coef_cache = clamp(
-		(abs(_rotation_speed_cache) - activation_speed_threshold_lower) / \
-		max(0.0001, activation_speed_threshold_upper - activation_speed_threshold_lower), 
-		0, 
-		1
-	)
+	if activation_speed_threshold_upper == activation_speed_threshold_lower:
+		_fade_in_coef_cache = 1.0 if abs_rotation_speed > activation_speed_threshold_lower else 0.0
+		
+	else:
+		_fade_in_coef_cache = clamp(
+			(abs_rotation_speed - activation_speed_threshold_lower) / (activation_speed_threshold_upper - activation_speed_threshold_lower), 
+			0, 
+			1
+		)
 	
 	_set_shader_parameter_recursive(
 		_enveloping_node.material_override,
