@@ -16,7 +16,7 @@ func _process(delta: float) -> void:
 		
 	else:
 		if parent_viewport is Window:
-			size = parent_viewport.content_scale_size
+			size = parent_viewport.get_size_with_decorations()
 			
 		elif parent_viewport is SubViewport:
 			size = parent_viewport.size

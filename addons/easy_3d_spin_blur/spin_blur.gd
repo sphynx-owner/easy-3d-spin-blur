@@ -342,11 +342,17 @@ func capture_shadows() -> void:
 
 ## Allows achieving color correctness with environments that have accumulative color effects like
 ## tonemapping and adjustments, by creating a duplicate of the environment with those turned off.
+## In case where the environment sits on a camera, this can also be used to transfer that environment
+## correctly to the spin blur.
 ## If the original environment changes, you may want to call this again.
 ## Note that this will affect all other spin blurs that share the same
-## parent viewport nad render layer as this one.
-func fix_environment(world_environment: WorldEnvironment) -> void:
-	var environment: Environment = world_environment.environment.duplicate()
+## parent viewport and render layer.
+func fix_environment(environment_node: Node) -> void:
+	if environment_node is not WorldEnvironment and environment_node is not Camera3D:
+		push_error("fix_environment() can only accept a WorldEnvironment or Camera3D nodes")
+		return
+	
+	var environment: Environment = environment_node.environment.duplicate()
 	
 	environment.adjustment_enabled = false
 	environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR
