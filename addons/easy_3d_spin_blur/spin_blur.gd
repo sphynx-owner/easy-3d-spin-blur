@@ -170,12 +170,25 @@ func _enter_tree() -> void:
 	SpinBlurHelpers.register_spin_blur(self)
 	
 	_update_enabled()
+	
+	# Since we are setting the depth texture uniform to null when exiting the tree,
+	# we have to recover it upon entering again, indicated by the node being ready at this point.
+	if is_node_ready():
+		_update_depth_texture()
 
 
 func _exit_tree() -> void:
 	SpinBlurHelpers.unregister_spin_blur(self)
 	
 	_enabled = false
+	
+	# This fixes a rendering device error regarding invalid bindings
+	# when the spin blur node is deleted in the editor, and perhaps other scenarios
+	_set_shader_parameter_recursive(
+		_enveloping_node.material_override, 
+		"depth_texture",
+		null
+	)
 
 
 func _ready() -> void:
