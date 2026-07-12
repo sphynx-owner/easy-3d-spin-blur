@@ -84,6 +84,9 @@ func _update_meshes() -> void:
 		mesh.layers = render_layers
 		mesh.visible = false
 	
+	if !_spin_blur.enabled:
+		return
+	
 	_mesh_instances[0].global_transform = _parent_mesh.global_transform
 	
 	var angle_interval: float = TAU / subdivisions
