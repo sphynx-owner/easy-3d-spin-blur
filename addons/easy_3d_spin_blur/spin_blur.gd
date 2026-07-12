@@ -459,6 +459,9 @@ func _collect_target_meshes_recursive(
 
 
 func _target_set_layers_recursive(layers: int, node: Node = target) -> void:
+	if !target:
+		return
+	
 	if node is VisualInstance3D and !_is_shadow_mesh(node):
 		node.layers = layers
 	
