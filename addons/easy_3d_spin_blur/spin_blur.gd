@@ -36,6 +36,14 @@ const SHADOW_DUP_META_KEY: StringName = &"spin_blur_shadow_dup"
 ## A rotation axis local to [member target] along which spin blur will occur
 @export var target_rotation_axis: Vector3 = Vector3(1, 0, 0)
 
+## When [code]ture[/code], the rotation axis will not be determined by [member target_rotation_axis].
+## Instead it will be determined by the angular difference of the mesh between frames. This means the
+## enveloping mesh and the spin blur would align to the current rotation axis of your mesh, regardless
+## to it's orientation. To compare, the default behavior sticks to target_rotation_axis local to the target
+## mesh, and extract how much of the mesh's actual rotation aligns with that axis.
+## A usecase of this feature is for uniform, free-rolling meshes like rolling balls.
+@export var use_free_rotation_axis: bool = false
+
 @export_subgroup("activation speed thresholds", "activation_speed_threshold")
 
 ## Above this rotation speed (in radians per frame), the spin blur will start
@@ -521,18 +529,24 @@ func _update_enveloping_node() -> void:
 	
 	var target_transform : Transform3D = target.global_transform
 	
+	var difference_quat: Quaternion = Quaternion(target_transform.basis.get_rotation_quaternion() \
+	* _past_global_transform.basis.get_rotation_quaternion().inverse())
+	
 	var normalized_target_rotation_axis: Vector3 = target_rotation_axis.normalized()
 	
-	_rotation_vector_cache = target_transform.orthonormalized().basis * normalized_target_rotation_axis
+	if use_free_rotation_axis:
+		_rotation_vector_cache = difference_quat.get_axis()
+		if _rotation_vector_cache.is_zero_approx():
+			_rotation_vector_cache = Vector3.RIGHT
+		
+	else:
+		_rotation_vector_cache = target_transform.orthonormalized().basis * normalized_target_rotation_axis
 	
 	_set_shader_parameter_recursive(
 		_enveloping_node.material_override,
 		"local_rotation_axis",
 		 normalized_target_rotation_axis
 	)
-	
-	var difference_quat: Quaternion = Quaternion(target_transform.basis.get_rotation_quaternion() \
-	* _past_global_transform.basis.get_rotation_quaternion().inverse())
 	
 	var centered_angle: float = difference_quat.get_angle() - PI
 	
